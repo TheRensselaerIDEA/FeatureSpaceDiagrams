@@ -3,8 +3,8 @@ title: "Feature Space Diagram in R"
 author: "John Erickson"
 date: "`r Sys.Date()`"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -41,9 +41,12 @@ Our workflow is generally as described in the original post:
 # TODO: User uploads data
 # Load data 
 boston <- read.csv("boston.csv", header = TRUE, fileEncoding="latin1")
+WDBC <- read.csv("WDBC.csv", header = TRUE, fileEncoding="latin1")
 
 # Ensure we have a matrix
-mydata <- as.matrix(boston)
+#mydata <- as.matrix(boston)
+mydata <- as.matrix(WDBC[,3:32])
+
 ```
 
 ## Initial Correlation Matrix 
@@ -51,7 +54,7 @@ mydata <- as.matrix(boston)
 ```{r correlation}
 # Simple correlation matrix calculation
 # TODO: user chooses method
-mydata.cor <- cor(boston, method = c("pearson", "kendall", "spearman"), use = "complete.obs")
+mydata.cor <- cor(mydata, method = c("pearson", "kendall", "spearman"), use = "complete.obs")
 
 # # Optional
 # corrplot(mydata.cor)
@@ -84,7 +87,7 @@ mydata.cor.ro.1.pca.plot <- as.data.frame(mydata.cor.ro.1.pca$x[,1:2])
 
 ```{r clusters} 
 # Pull out our clusters 
-mydata.cor.ro.1.pca.plot$cluster <- as.factor(kmeans(mydata.cor.ro.1.pca$x[,1:2], centers=4)$cluster)
+mydata.cor.ro.1.pca.plot$cluster <- as.factor(kmeans(mydata.cor.ro.1.pca$x[,1:2], centers=6)$cluster)
 mydata.cor.ro.1.pca.plot$name <- rownames(mydata.cor.ro.1)
 ```
 
@@ -95,7 +98,7 @@ This is the hard part...
 ```{r network}
 # Determine connectivity!
 # filtering
-selector <- ((abs(mydata.cor.ro.1) <= 0.5 ) * 1)
+selector <- ((abs(mydata.cor.ro.1) <= 0.35 ) * 1)
 
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[,i] <- selector[,i] * as.numeric(mydata.cor.ro.1.pca.plot$cluster)}
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[i,i] <- 0 }
@@ -135,7 +138,8 @@ ggplot(mydata.cor.ro.1.pca.plot, aes(x=PC1, y=PC2)) +
   geom_point(aes(color=cluster, size=4), show.legend = FALSE) +
   geom_text(aes(label=name),hjust=1, vjust=0) +
   geom_segment(aes(x=X1,y=Y1,xend=X2,yend=Y2,color=weight), data=mydata.segments) +
-  labs(title="Feature Space Diagram for the Boston Housing data set")
+#  labs(title="Feature Space Diagram for the Boston Housing data set")
+  labs(title="Feature Space Diagram for the Wisconsin Breast Cancer data set")
 
 # ggplot() + 
 #   geom_segment(aes(x=X1,y=Y1,xend=X2,yend=Y2,color=weight), data=mydata.segments.test)
