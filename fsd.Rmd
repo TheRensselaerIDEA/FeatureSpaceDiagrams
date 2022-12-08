@@ -3,8 +3,8 @@ title: "Feature Space Diagram in R"
 author: "John Erickson"
 date: "`r Sys.Date()`"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -103,12 +103,40 @@ selector <- ((abs(mydata.cor.ro.1) <= 0.35 ) * 1)
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[,i] <- selector[,i] * as.numeric(mydata.cor.ro.1.pca.plot$cluster)}
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[i,i] <- 0 }
 
+# Re-scale the line weights
+range <- c(1,10)
+domain <- c(min(abs(mydata.cor.ro.1)[abs(mydata.cor.ro.1)>0]),max(abs(mydata.cor.ro.1)))
+line.lm <- lm(range~domain)
+
+adjust <- function(x){ 
+  # stupid lm trick to scale
+    line.lm$coefficients[[2]] * x + line.lm$coefficients[[1]]
+  }
+  
+# Repeat selector matrix, this time for strength of relationships
+thickness <- ((abs(mydata.cor.ro.1) <= 0.35 ) * 1)
+for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {thickness[i,i] <- 0 } # remove diagonal
+for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {
+  for (j in 1:length(thickness[,i])) {
+    if (thickness[j,i] != 0 ) {
+      thickness[j,i] <- adjust(thickness[j,i] * abs(mydata.cor.ro.1[j,i]))
+    } else { thickness[j,i] <- 0}
+  }
+}
+
 # Switching to networks
 # Create igraph structure
 network <- graph_from_adjacency_matrix(selector, weighted = TRUE)
+network.t <- graph_from_adjacency_matrix(thickness, weighted = TRUE)
 
 # Gets us our edges!
-mydata.edges <- get.data.frame(network)
+mydata.edges <- get.data.frame(network) %>% # this is where "weight" is introduced
+  rename(Cluster = weight)
+
+mydata.edges.t <- get.data.frame(network.t) %>% # this is where "weight" is introduced
+  rename(thickness = weight) %>%
+  mutate(thickness = as.integer(thickness))
+
 
 # replace `from` with X1 and Y1, and `to` with X2 and Y2
 # These will be our line segments!
@@ -124,24 +152,34 @@ mydata.segments <- mydata.segments %>%
   mutate(X2=PC1, Y2=PC2) %>%
   select(-PC1, -PC2)
 
+mydata.segments <- mydata.segments %>%
+  rename(cluster = Cluster)
+
 mydata.cor.ro.1.pca.plot$cluster <- as.factor(mydata.cor.ro.1.pca.plot$cluster)
 
-# This really isn't "weight"...
-mydata.segments$weight <- as.factor(mydata.segments$weight)
+# NEW: cluster used for coloring 
+mydata.segments$cluster <- as.factor(mydata.segments$cluster)
+mydata.segments$thickness <- as.integer(mydata.edges.t$thickness)
+
 ```
 
 ## Building the Plot
 
-```{r plotting}
+```{r,plotting,fig.width=10,fig.height=10}
 # Adding line segments to PCA plot
-ggplot(mydata.cor.ro.1.pca.plot, aes(x=PC1, y=PC2)) + 
-  geom_point(aes(color=cluster, size=4), show.legend = FALSE) +
-  geom_text(aes(label=name),hjust=1, vjust=0) +
-  geom_segment(aes(x=X1,y=Y1,xend=X2,yend=Y2,color=weight), data=mydata.segments) +
+p <- ggplot(mydata.cor.ro.1.pca.plot, aes(x=PC1, y=PC2)) + 
+  geom_point(aes(color=cluster, size=2), show.legend = FALSE) +
+  xlim(-1.5,1.5) + 
+  ylim(-1.5,1.5) +
+  geom_text(aes(label=name),hjust=1, vjust=0, size=3) +
+  geom_curve(aes(x=X1,y=Y1,xend=X2,yend=Y2,color=cluster,size=thickness, alpha=0.4), curvature=0.2, data=mydata.segments) +
+  guides(alpha = FALSE) +
+  scale_size(range = c(0.1, 1.5), guide = guide_none()) +
 #  labs(title="Feature Space Diagram for the Boston Housing data set")
-  labs(title="Feature Space Diagram for the Wisconsin Breast Cancer data set")
+  labs(title="Feature Space Diagram for the Wisconsin Breast Cancer data set") + 
+  labs(caption = "See: https://github.rpi.edu/DataINCITE/FeatureSpaceDiagram/")
 
-# ggplot() + 
-#   geom_segment(aes(x=X1,y=Y1,xend=X2,yend=Y2,color=weight), data=mydata.segments.test)
+p 
 
+ggsave("WDBC_fsd.png", p)
 ```
