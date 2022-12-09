@@ -3,8 +3,8 @@ title: "Feature Space Diagram in R"
 author: "John Erickson"
 date: "`r Sys.Date()`"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
