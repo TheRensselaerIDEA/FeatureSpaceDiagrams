@@ -3,8 +3,8 @@ title: "Feature Space Diagram in R"
 author: "John Erickson"
 date: "`r Sys.Date()`"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -40,8 +40,8 @@ Our workflow is generally as described in the original post:
 ```{r data_load}
 # TODO: User uploads data
 # Load data 
-boston <- read.csv("boston.csv", header = TRUE, fileEncoding="latin1")
-WDBC <- read.csv("WDBC.csv", header = TRUE, fileEncoding="latin1")
+#boston <- read.csv("boston.csv", header = TRUE, fileEncoding="latin1")  # Boston Housing data
+WDBC <- read.csv("WDBC.csv", header = TRUE, fileEncoding="latin1")# Wisconsin Breast Cancer data
 
 # Ensure we have a matrix
 #mydata <- as.matrix(boston)
@@ -64,13 +64,28 @@ mydata.cor <- cor(mydata, method = c("pearson", "kendall", "spearman"), use = "c
 
 # Reorder correlation matrix based on: https://rdrr.io/cran/lessR/man/corReorder.html 
 mydata.cor.ro <- corReorder(mydata.cor)
+
+
 ```
 
-## Distance Matrix Calculation
 
-```{r distance}
+## Distance Matrix and Hiearchical/Agglomerative Clustering
+
+```{r}
+## Distance Matrix Calculation
 # Distance matrix (Absolute value et.al.)
 mydata.cor.ro.1 <- abs(mydata.cor.ro) - 1
+
+# Calculate distances using stats::dist
+mydata.dist <- dist(mydata.cor.ro.1)
+
+# Calculate clusters using stats::hclust
+mydata.hclust <- hclust(mydata.dist)
+plot(mydata.hclust) # Plot it, just because
+
+mydata.hclust.groups <- cutree(mydata.hclust, k=6) 
+rect.hclust(mydata.hclust, k=6, border="red") # Plot, highlighted by rectangles
+
 ```
 
 ## PCA on Distance Matrix
@@ -87,7 +102,8 @@ mydata.cor.ro.1.pca.plot <- as.data.frame(mydata.cor.ro.1.pca$x[,1:2])
 
 ```{r clusters} 
 # Pull out our clusters 
-mydata.cor.ro.1.pca.plot$cluster <- as.factor(kmeans(mydata.cor.ro.1.pca$x[,1:2], centers=6)$cluster)
+#mydata.cor.ro.1.pca.plot$cluster <- as.factor(kmeans(mydata.cor.ro.1.pca$x[,1:2], centers=6)$cluster)
+mydata.cor.ro.1.pca.plot$cluster <- as.factor(mydata.hclust.groups)
 mydata.cor.ro.1.pca.plot$name <- rownames(mydata.cor.ro.1)
 ```
 
@@ -98,7 +114,7 @@ This is the hard part...
 ```{r network}
 # Determine connectivity!
 # filtering
-selector <- ((abs(mydata.cor.ro.1) <= 0.35 ) * 1)
+selector <- ((abs(mydata.cor.ro.1) <= 0.3 ) * 1)
 
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[,i] <- selector[,i] * as.numeric(mydata.cor.ro.1.pca.plot$cluster)}
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[i,i] <- 0 }
@@ -114,7 +130,7 @@ adjust <- function(x){
   }
   
 # Repeat selector matrix, this time for strength of relationships
-thickness <- ((abs(mydata.cor.ro.1) <= 0.35 ) * 1)
+thickness <- ((abs(mydata.cor.ro.1) <= 0.3 ) * 1)
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {thickness[i,i] <- 0 } # remove diagonal
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {
   for (j in 1:length(thickness[,i])) {
@@ -171,13 +187,14 @@ p <- ggplot(mydata.cor.ro.1.pca.plot, aes(x=PC1, y=PC2)) +
   geom_point(aes(color=cluster, size=2), show.legend = FALSE) +
   xlim(-1.5,1.5) + 
   ylim(-1.5,1.5) +
-  geom_text(aes(label=name),hjust=1, vjust=0, size=3) +
   geom_curve(aes(x=X1,y=Y1,xend=X2,yend=Y2,color=cluster,size=thickness, alpha=0.4), curvature=0.2, data=mydata.segments) +
   guides(alpha = FALSE) +
   scale_size(range = c(0.1, 1.5), guide = guide_none()) +
 #  labs(title="Feature Space Diagram for the Boston Housing data set")
   labs(title="Feature Space Diagram for the Wisconsin Breast Cancer data set") + 
-  labs(caption = "See: https://github.rpi.edu/DataINCITE/FeatureSpaceDiagram/")
+  labs(caption = "See: https://github.rpi.edu/DataINCITE/FeatureSpaceDiagram/") +
+  geom_text(aes(label=name),hjust=1, vjust=0, size=3)
+
 
 p 
 
