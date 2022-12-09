@@ -16,4 +16,8 @@ Our workflow is generally as described in the original post:
 * Color each feature by its cluster.
 * Draw lines to represent relationships of at least r = 0.7 (or user’s choosing)
 
+##Acknowledgements
+
+Many thanks to [Win Cowger](https://mastodon.social/@wincowger) and the rest of the [#Rstats Fediverse community](https://mastodon.social/@rstats@a.gup.pe) for the inspiration!
+
 ![image](https://media.github.rpi.edu/user/155/files/122e7fef-da07-4e57-b0b6-7c2067dadfc1)
