@@ -236,7 +236,7 @@ ggsave(filename="WDBC_fsd.png", plot = p)
 
 Usually we review the feature space using a PCA biplot. Let's see how it compares!
 
-```{r ,fig.width=10,fig.height=10, eval=FALSE}
+```{r ,fig.width=10,fig.height=10, eval=FALSE, echo=FALSE}
 mydata.pca <- prcomp(na.omit(mydata), center = TRUE, scale. = TRUE)
 
 ggbiplot(mydata.pca) +
