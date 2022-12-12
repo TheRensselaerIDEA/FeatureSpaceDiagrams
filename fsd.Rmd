@@ -17,6 +17,9 @@ knitr::opts_chunk$set(echo = TRUE)
 This is a first effort to implement "feature space diagrams" in R, inspired by https://towardsdatascience.com/escape-the-correlation-matrix-into-feature-space-4d71c51f25e5
 
 ```{r,libraries, results=FALSE, message=FALSE, warning=FALSE}
+
+#library(devtools)
+#install_github("vqv/ggbiplot")
 library(ggbiplot)
 library(lessR)
 library(Hmisc)
