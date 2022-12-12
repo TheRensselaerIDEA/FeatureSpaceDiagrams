@@ -259,9 +259,9 @@ ggbiplot(mydata.pca) +
 
 ```{r correlation}
 
-plot_gen <- function(mydata, method){
+plot_gen <- function(mydata, cor_method, threshold){
     # Simple correlation matrix calculation
-mydata.cor <- cor(mydata, method = method, use = "complete.obs")
+mydata.cor <- cor(mydata, method = cor_method, use = "complete.obs")
 
 # # Optional
 # corrplot(mydata.cor)
@@ -299,7 +299,7 @@ mydata.cor.ro.1.pca.plot$name <- rownames(mydata.cor.ro.1)
 
 # Determine connectivity!
 # filtering
-selector <- ((abs(mydata.cor.ro.1) <= 0.35 ) * 1)
+selector <- ((abs(mydata.cor.ro.1) <= threshold ) * 1)
 
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[,i] <- selector[,i] * as.numeric(mydata.cor.ro.1.pca.plot$cluster)}
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[i,i] <- 0 }
@@ -315,7 +315,7 @@ adjust <- function(x){
   }
   
 # Repeat selector matrix, this time for strength of relationships
-thickness <- ((abs(mydata.cor.ro.1) <= 0.35 ) * 1)
+thickness <- ((abs(mydata.cor.ro.1) <= threshold ) * 1)
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {thickness[i,i] <- 0 } # remove diagonal
 for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {
   for (j in 1:length(thickness[,i])) {
@@ -380,7 +380,7 @@ ggplot(mydata.cor.ro.1.pca.plot, aes(x=PC1, y=PC2)) +
 }
 
 #Test
-plot_gen(mydata = as.matrix(WDBC[,3:32]), method = "pearson")
+plot_gen(mydata = as.matrix(WDBC[,3:32]), cor_method = "pearson", threshold = 0.1)
 
 
 ```
@@ -393,6 +393,7 @@ shinyApp(
     fileInput(inputId = "file", label = "CSV Data File", accept = ".csv"),
     selectInput("cor_method", "Correlation Method:",
                 choices = c("pearson", "spearman", "kendall")),
+    sliderInput(inputId = "line_threshold", label = "Distance Threshold", value = 0.5,  min = 0, max = 1, step = 0.1),
     plotlyOutput("feature_plot")
   ),
 
@@ -400,7 +401,7 @@ shinyApp(
     output$feature_plot = renderPlotly({
         req(input$file)
         ggplotly(
-            plot_gen(mydata = read.csv(input$file$datapath) %>% dplyr::select(where(is.numeric)), method = input$cor_method), height = 800
+            plot_gen(mydata = read.csv(input$file$datapath) %>% dplyr::select(where(is.numeric)), cor_method = input$cor_method, threshold = input$line_threshold), height = 800
         )
     })
   }
