@@ -1,5 +1,6 @@
 ---
-title: "Feature Space Diagram in R"
+title: "Feature Space Diagrams in R"
+subtitle: "Testing the methods on Wisconsin Breast Cancer Dataset"
 author: "John Erickson"
 date: "`r Sys.Date()`"
 output:
@@ -16,12 +17,15 @@ knitr::opts_chunk$set(echo = TRUE)
 This is a first effort to implement "feature space diagrams" in R, inspired by https://towardsdatascience.com/escape-the-correlation-matrix-into-feature-space-4d71c51f25e5
 
 ```{r,libraries, results=FALSE, message=FALSE, warning=FALSE}
+library(ggbiplot)
 library(lessR)
 library(Hmisc)
 library(corrplot)
 library(gplots)
 library(igraph)
 library(tidyverse)
+library(ggrepel)
+
 ```
 
 ## Workflow
@@ -40,12 +44,13 @@ Our workflow is generally as described in the original post:
 ```{r data_load}
 # TODO: User uploads data
 # Load data 
-#boston <- read.csv("boston.csv", header = TRUE, fileEncoding="latin1")  # Boston Housing data
-WDBC <- read.csv("WDBC.csv", header = TRUE, fileEncoding="latin1")# Wisconsin Breast Cancer data
+#boston <- read.csv("boston.csv", header = TRUE, fileEncoding="latin1")
+WDBC <- read.csv("WDBC.csv", header = TRUE, fileEncoding="latin1")
 
 # Ensure we have a matrix
-#mydata <- as.matrix(boston)
-mydata <- as.matrix(WDBC[,3:32])
+#mydata <- na.omit(as.matrix(boston))
+mydata <- na.omit(as.matrix(WDBC[,3:32]))
+#mydata <- as.matrix(mtcars[,c(1:7,10,11)])
 
 ```
 
@@ -54,7 +59,9 @@ mydata <- as.matrix(WDBC[,3:32])
 ```{r correlation}
 # Simple correlation matrix calculation
 # TODO: user chooses method
-mydata.cor <- cor(mydata, method = c("pearson", "kendall", "spearman"), use = "complete.obs")
+mydata.cor <- cor(mydata, method = c("pearson"), use = "complete.obs")
+#mydata.cor <- cor(mydata, method = c("kendall"), use = "complete.obs")
+#mydata.cor <- cor(mydata, method = c("spearman"), use = "complete.obs")
 
 # # Optional
 # corrplot(mydata.cor)
@@ -64,47 +71,60 @@ mydata.cor <- cor(mydata, method = c("pearson", "kendall", "spearman"), use = "c
 
 # Reorder correlation matrix based on: https://rdrr.io/cran/lessR/man/corReorder.html 
 mydata.cor.ro <- corReorder(mydata.cor)
-
-
 ```
 
+## Distance Matrix Calculation
 
-## Distance Matrix and Hiearchical/Agglomerative Clustering
+Correlation can often be used as a distance metric for hierarchical clustering; see [e.g. this discussion](https://stats.stackexchange.com/questions/165194/using-correlation-as-distance-metric-for-hierarchical-clustering). 
+
+We're using the `dist()` function to provide a number of different distance options (default is _euclidean_ distance). 
+
+
+```{r distance}
+# # Simplistic distance matrix (Absolute value et.al.)
+# mydata.cor.ro.1 <- abs(mydata.cor.ro) - 1
+
+# Distance Matrix via: https://stat.ethz.ch/R-manual/R-devel/library/stats/html/dist.html
+mydata.dist <- dist(mydata.cor.ro, upper = TRUE, method = "manhattan") 
+mydata.dist.sym <- as.matrix(mydata.dist )
+```
+
+## Hiearchical/Agglomerative Clustering (NEW)
 
 ```{r}
-## Distance Matrix Calculation
-# Distance matrix (Absolute value et.al.)
-mydata.cor.ro.1 <- abs(mydata.cor.ro) - 1
+# See eg: 
+# * https://metudatascience.github.io/datascience/clustering.html
+# * https://uc-r.github.io/hc_clustering
 
-# Calculate distances using stats::dist
-mydata.dist <- dist(mydata.cor.ro.1)
-
-# Calculate clusters using stats::hclust
+# Distance calculated above
 mydata.hclust <- hclust(mydata.dist)
-plot(mydata.hclust) # Plot it, just because
+plot(mydata.hclust)
 
-mydata.hclust.groups <- cutree(mydata.hclust, k=6) 
-rect.hclust(mydata.hclust, k=6, border="red") # Plot, highlighted by rectangles
-
+# NOTE! These clusters are in numerical order, not feature order! 
+mydata.hclust.groups <- cutree(mydata.hclust, k=10) # Usually 3 is used for mtcars demos
+rect.hclust(mydata.hclust, k=10, border="red")
 ```
 
 ## PCA on Distance Matrix
 
 ```{r PCA} 
 # PCA 
-mydata.cor.ro.1.pca <- prcomp(mydata.cor.ro.1)
+#mydata.dist.sym.pca <- prcomp(mydata.dist.sym,scale=TRUE)
+mydata.dist.sym.pca <- prcomp(mydata.dist.sym) # Un-scaled gives results closer to source article
 
 # Plottable version:
-mydata.cor.ro.1.pca.plot <- as.data.frame(mydata.cor.ro.1.pca$x[,1:2])
+mydata.dist.sym.pca.plot <- as.data.frame(mydata.dist.sym.pca$x[,1:2])
 ```
 
 ## Finding the Clusters
 
+Write the cluster assignments and the feature names into the PCA data frame. 
+
 ```{r clusters} 
-# Pull out our clusters 
-#mydata.cor.ro.1.pca.plot$cluster <- as.factor(kmeans(mydata.cor.ro.1.pca$x[,1:2], centers=6)$cluster)
-mydata.cor.ro.1.pca.plot$cluster <- as.factor(mydata.hclust.groups)
-mydata.cor.ro.1.pca.plot$name <- rownames(mydata.cor.ro.1)
+# Pull out our clusters (calculated)
+mydata.dist.sym.pca.plot$cluster <- as.factor(mydata.hclust.groups) 
+mydata.dist.sym.pca.plot$name <- rownames(mydata.cor.ro)
+
 ```
 
 ## Finding the Graph!
@@ -113,15 +133,20 @@ This is the hard part...
 
 ```{r network}
 # Determine connectivity!
-# filtering
-selector <- ((abs(mydata.cor.ro.1) <= 0.3 ) * 1)
+# This selects the nodes (features) we want to connect
+threshold <- 5.5
+selector <- ((abs(mydata.dist.sym) <= threshold ) * 1) # Filter out lines greater than threshold distance
+for (i in 1:length(mydata.dist.sym.pca.plot$cluster)) {selector[,i] <- selector[,i] * as.numeric(mydata.dist.sym.pca.plot$cluster)}
+diag(selector) <- 0 
 
-for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[,i] <- selector[,i] * as.numeric(mydata.cor.ro.1.pca.plot$cluster)}
-for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[i,i] <- 0 }
+filtered <- abs(mydata.dist.sym)
 
-# Re-scale the line weights
+filtered[ filtered <= threshold ] <- 0
+
+# Get the function for re-scaling the line weights
+# Line thicknesses will automatically range from 1-10
 range <- c(1,10)
-domain <- c(min(abs(mydata.cor.ro.1)[abs(mydata.cor.ro.1)>0]),max(abs(mydata.cor.ro.1)))
+domain <- c(min(filtered[filtered > 0]),max(filtered))
 line.lm <- lm(range~domain)
 
 adjust <- function(x){ 
@@ -130,15 +155,21 @@ adjust <- function(x){
   }
   
 # Repeat selector matrix, this time for strength of relationships
-thickness <- ((abs(mydata.cor.ro.1) <= 0.3 ) * 1)
-for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {thickness[i,i] <- 0 } # remove diagonal
-for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {
+# Select the nodes (features) we want to connect
+thickness <- ((abs(mydata.dist.sym) <= threshold ) * 1) # Filter out lines greater than threshold distance
+diag(thickness) <- 0  # remove diagonal
+
+# Use distances as thicknesses for the arcs we're keeping
+for (i in 1:length(mydata.dist.sym.pca.plot$cluster)) {
   for (j in 1:length(thickness[,i])) {
     if (thickness[j,i] != 0 ) {
-      thickness[j,i] <- adjust(thickness[j,i] * abs(mydata.cor.ro.1[j,i]))
+#      thickness[j,i] <- adjust(thickness[j,i] * abs(mydata.dist.sym[j,i]))
+      thickness[j,i] <- thickness[j,i] * abs(mydata.dist.sym[j,i])
     } else { thickness[j,i] <- 0}
   }
 }
+
+diag(thickness) <- 0 
 
 # Switching to networks
 # Create igraph structure
@@ -147,35 +178,37 @@ network.t <- graph_from_adjacency_matrix(thickness, weighted = TRUE)
 
 # Gets us our edges!
 mydata.edges <- get.data.frame(network) %>% # this is where "weight" is introduced
-  rename(Cluster = weight)
+  dplyr::rename(Cluster = weight)
 
 mydata.edges.t <- get.data.frame(network.t) %>% # this is where "weight" is introduced
-  rename(thickness = weight) %>%
-  mutate(thickness = as.integer(thickness))
+  dplyr::rename(thickness = weight) %>%
+#  mutate(thickness = as.integer(thickness))
+  mutate(thickness = thickness)
 
 
 # replace `from` with X1 and Y1, and `to` with X2 and Y2
 # These will be our line segments!
 mydata.segments <- mydata.edges %>% 
-  left_join(mydata.cor.ro.1.pca.plot, by=c("from"="name")) %>%
-  select(-cluster) %>%
+  left_join(mydata.dist.sym.pca.plot, by=c("from"="name")) %>%
+  dplyr::select(-cluster) %>%
   mutate(X1=PC1, Y1=PC2) %>%
-  select(-PC1, -PC2)
+  dplyr::select(-PC1, -PC2)
 
 mydata.segments <- mydata.segments %>%
-  left_join(mydata.cor.ro.1.pca.plot, by=c("to"="name")) %>%
-  select(-cluster) %>%
+  left_join(mydata.dist.sym.pca.plot, by=c("to"="name")) %>%
+  dplyr::select(-cluster) %>%
   mutate(X2=PC1, Y2=PC2) %>%
-  select(-PC1, -PC2)
+  dplyr::select(-PC1, -PC2)
 
 mydata.segments <- mydata.segments %>%
-  rename(cluster = Cluster)
+  dplyr::rename(cluster = Cluster)
 
-mydata.cor.ro.1.pca.plot$cluster <- as.factor(mydata.cor.ro.1.pca.plot$cluster)
+mydata.dist.sym.pca.plot$cluster <- as.factor(mydata.dist.sym.pca.plot$cluster)
 
 # NEW: cluster used for coloring 
 mydata.segments$cluster <- as.factor(mydata.segments$cluster)
-mydata.segments$thickness <- as.integer(mydata.edges.t$thickness)
+#mydata.segments$thickness <- as.integer(mydata.edges.t$thickness)
+mydata.segments$thickness <- mydata.edges.t$thickness
 
 ```
 
@@ -183,20 +216,33 @@ mydata.segments$thickness <- as.integer(mydata.edges.t$thickness)
 
 ```{r,plotting,fig.width=10,fig.height=10}
 # Adding line segments to PCA plot
-p <- ggplot(mydata.cor.ro.1.pca.plot, aes(x=PC1, y=PC2)) + 
-  geom_point(aes(color=cluster, size=2), show.legend = FALSE) +
-  xlim(-1.5,1.5) + 
-  ylim(-1.5,1.5) +
-  geom_curve(aes(x=X1,y=Y1,xend=X2,yend=Y2,color=cluster,size=thickness, alpha=0.4), curvature=0.2, data=mydata.segments) +
+p <- ggplot(mydata.dist.sym.pca.plot, aes(x=PC1, y=PC2)) + 
+  geom_point(aes(color=cluster, size=6), show.legend = FALSE) +
+  geom_curve(aes(x=X1, y=Y1, xend=X2, yend=Y2, color=cluster, size=thickness, alpha=0.4), curvature=0.2, data=mydata.segments) +
   guides(alpha = FALSE) +
-  scale_size(range = c(0.1, 1.5), guide = guide_none()) +
-#  labs(title="Feature Space Diagram for the Boston Housing data set")
+  scale_size(range = c(0.1, 2), guide = guide_none()) +
+  geom_text_repel(aes(label=name),hjust=1, vjust=0, size=3) +
+#  labs(title="Feature Space Diagram for the Boston Housing data set") +
   labs(title="Feature Space Diagram for the Wisconsin Breast Cancer data set") + 
-  labs(caption = "See: https://github.rpi.edu/DataINCITE/FeatureSpaceDiagram/") +
-  geom_text(aes(label=name),hjust=1, vjust=0, size=3)
-
+#  labs(title="Feature Space Diagram for the classic `mtcars` data set") + 
+  labs(caption = "See: https://github.rpi.edu/DataINCITE/FeatureSpaceDiagram/")
 
 p 
 
-ggsave("WDBC_fsd.png", p)
+ggsave(filename="WDBC_fsd.png", plot = p)
+```
+
+## Sanity check: Biplot on the original dataset 
+
+Usually we review the feature space using a PCA biplot. Let's see how it compares!
+
+```{r ,fig.width=10,fig.height=10, eval=FALSE}
+mydata.pca <- prcomp(na.omit(mydata), center = TRUE, scale. = TRUE)
+
+ggbiplot(mydata.pca) +
+    xlim(-2.5,2.5) + 
+  ylim(-2.5,2.5)
+  
+
+
 ```
