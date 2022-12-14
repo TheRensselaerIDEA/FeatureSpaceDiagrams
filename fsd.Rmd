@@ -235,7 +235,7 @@ p <- ggplot(mydata.dist.sym.pca.plot, aes(x=PC1, y=PC2)) +
 
 p 
 
-ggsave(filename="WDBC_fsd.png", plot = p)
+ggsave(filename="fsd_wdbc.png", plot = p)
 ```
 
 ## Sanity check: Biplot on the original dataset 
