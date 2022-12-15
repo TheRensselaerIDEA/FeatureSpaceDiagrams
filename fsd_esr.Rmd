@@ -52,7 +52,9 @@ Our workflow is generally as described in the original post:
 # Load data 
 #boston <- read.csv("boston.csv", header = TRUE, fileEncoding="latin1")
 #WDBC <- read.csv("WDBC.csv", header = TRUE, fileEncoding="latin1")
-esr <- read.csv("EpilepticSeizureRecognition.csv", header = TRUE, fileEncoding="latin1")
+#esr <- read.csv("EpilepticSeizureRecognition.csv", header = TRUE, fileEncoding="latin1")
+#esr <- read.csv("https://raw.githubusercontent.com/MattJBritton/ExquisiteCorrpse/master/data/epilepsy.csv",header = TRUE, fileEncoding="latin1")
+esr <- readRDS("esr.Rds")
 
 # Ensure we have a matrix
 #mydata <- na.omit(as.matrix(boston))
@@ -68,8 +70,9 @@ mydata <- na.omit(as.matrix(esr[,2:179]))
 # TODO: user chooses method
 #mydata.cor <- cor(mydata, method = c("pearson"), use = "complete.obs")
 #mydata.cor <- cor(mydata, method = c("kendall"), use = "complete.obs")
-mydata.cor <- cor(mydata, method = c("spearman"), use = "complete.obs")
-
+#mydata.cor <- cor(mydata, method = c("spearman"), use = "complete.obs")
+mydata.cor <- cor(mydata, method = c("spearman"))
+mydata.cor <- round(mydata.cor, 2)
 # # Optional
 # corrplot(mydata.cor)
 # 
@@ -108,8 +111,8 @@ mydata.hclust <- hclust(mydata.dist)
 plot(mydata.hclust)
 
 # NOTE! These clusters are in numerical order, not feature order! 
-mydata.hclust.groups <- cutree(mydata.hclust, k=20) # Usually 3 is used for mtcars demos
-rect.hclust(mydata.hclust, k=20, border="red")
+mydata.hclust.groups <- cutree(mydata.hclust, k=40) # Usually 3 is used for mtcars demos
+rect.hclust(mydata.hclust, k=40, border="red")
 ```
 
 ## PCA on Distance Matrix
@@ -141,7 +144,7 @@ This is the hard part...
 ```{r network}
 # Determine connectivity!
 # This selects the nodes (features) we want to connect
-threshold <- 5.5
+threshold <- 5 # was 5.5
 selector <- ((abs(mydata.dist.sym) <= threshold ) * 1) # Filter out lines greater than threshold distance
 for (i in 1:length(mydata.dist.sym.pca.plot$cluster)) {selector[,i] <- selector[,i] * as.numeric(mydata.dist.sym.pca.plot$cluster)}
 diag(selector) <- 0 
@@ -230,7 +233,7 @@ p <- ggplot(mydata.dist.sym.pca.plot, aes(x=PC1, y=PC2)) +
   geom_curve(aes(x=X1, y=Y1, xend=X2, yend=Y2, color=cluster, size=thickness, alpha=0.4), curvature=0.2, data=mydata.segments) +
   guides(alpha = FALSE) +
   scale_size(range = c(0.1, 2), guide = guide_none()) +
-  geom_text_repel(aes(label=name),hjust=1, vjust=0, size=3) +
+  geom_text_repel(aes(label=name),hjust=1, vjust=0, size=3, max.overlaps=30) +
 #  labs(title="Feature Space Diagram for the Boston Housing data set") +
 #  labs(title="Feature Space Diagram for the Wisconsin Breast Cancer data set") + 
   labs(title="Feature Space Diagram for the Epileptic Seizure Recognition Dataset") + 
@@ -243,7 +246,7 @@ p
 ggsave(filename="fsd_esr.png", plot = p)
 ```
 
-## Sanity check: Biplot on the original dataset 
+## OPTIONAL: Biplot on the original dataset 
 
 Usually we review the feature space using a PCA biplot. Let's see how it compares!
 
@@ -272,4 +275,29 @@ var_explained.df %>%
   
 
 
+```
+
+## OPTIONAL: Interactive Feature Space Diagram!
+
+Make the feature space diagram interactive using `ggplotly()`...
+
+```{r ,fig.width=10,fig.height=10, eval=FALSE, echo=FALSE}
+# We need to re-build the plot, since several geometries aren't yet implemented in ggrepl or ggplotly :(
+
+p2 <- ggplot(mydata.dist.sym.pca.plot, aes(x=PC1, y=PC2)) + 
+  geom_point(aes(color=cluster, size=6), show.legend = FALSE) +
+  xlim(-60,60) +
+  ylim(-55,60) +
+  geom_segment(aes(x=X1, y=Y1, xend=X2, yend=Y2, color=cluster, size=thickness, alpha=0.4), data=mydata.segments) +
+  guides(alpha = FALSE) +
+  scale_size(range = c(0.1, 2), guide = guide_none()) +
+  geom_text(aes(label=name),hjust=1, vjust=0, size=3) +
+#  labs(title="Feature Space Diagram for the Boston Housing data set") +
+#  labs(title="Feature Space Diagram for the Wisconsin Breast Cancer data set") + 
+  labs(title="Feature Space Diagram for the Epileptic Seizure Recognition Dataset") + 
+#  labs(title="Feature Space Diagram for the classic `mtcars` data set") + 
+  labs(subtitle="Using Spearman correlation") + 
+  labs(caption = "See: https://github.com/TheRensselaerIDEA/FeatureSpaceDiagrams")
+
+ggplotly(p2)
 ```
