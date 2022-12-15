@@ -225,6 +225,8 @@ mydata.segments$thickness <- mydata.edges.t$thickness
 # Adding line segments to PCA plot
 p <- ggplot(mydata.dist.sym.pca.plot, aes(x=PC1, y=PC2)) + 
   geom_point(aes(color=cluster, size=6), show.legend = FALSE) +
+  xlim(-60,60) +
+  ylim(-55,60) +
   geom_curve(aes(x=X1, y=Y1, xend=X2, yend=Y2, color=cluster, size=thickness, alpha=0.4), curvature=0.2, data=mydata.segments) +
   guides(alpha = FALSE) +
   scale_size(range = c(0.1, 2), guide = guide_none()) +
@@ -233,7 +235,8 @@ p <- ggplot(mydata.dist.sym.pca.plot, aes(x=PC1, y=PC2)) +
 #  labs(title="Feature Space Diagram for the Wisconsin Breast Cancer data set") + 
   labs(title="Feature Space Diagram for the Epileptic Seizure Recognition Dataset") + 
 #  labs(title="Feature Space Diagram for the classic `mtcars` data set") + 
-  labs(caption = "See: https://github.rpi.edu/DataINCITE/FeatureSpaceDiagram/")
+  labs(subtitle="Using Spearman correlation") + 
+  labs(caption = "See: https://github.com/TheRensselaerIDEA/FeatureSpaceDiagrams")
 
 p 
 
@@ -245,11 +248,27 @@ ggsave(filename="fsd_esr.png", plot = p)
 Usually we review the feature space using a PCA biplot. Let's see how it compares!
 
 ```{r ,fig.width=10,fig.height=10, eval=FALSE, echo=FALSE}
+# Calculate the PCA on the full dataset 
 mydata.pca <- prcomp(na.omit(mydata), center = TRUE, scale. = TRUE)
 
 ggbiplot(mydata.pca) +
     xlim(-2.5,2.5) + 
-  ylim(-2.5,2.5)
+    ylim(-2.5,2.5)
+  
+# For completeness, create the scree plot...
+var_explained.df <- data.frame(PC = paste0("PC",1:length(mydata.pca$sdev)),
+                               var_explained=(mydata.pca$sdev)^2/sum((mydata.pca$sdev)^2))
+
+# Force the x-axis order to be what we want
+var_explained.df$PC <- factor(var_explained.df$PC, levels=unique(var_explained.df$PC))
+
+# Create the plot
+var_explained.df %>%
+  ggplot(aes(x=PC,y=var_explained, group=1))+
+  geom_point(size=4)+
+  geom_line()+
+  labs(title="Scree plot: PCA on scaled data")
+
   
 
 
