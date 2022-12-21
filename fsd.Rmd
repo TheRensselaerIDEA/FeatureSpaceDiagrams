@@ -28,9 +28,6 @@ library(gplots)
 library(igraph)
 library(tidyverse)
 library(ggrepel)
-library(shiny)
-library(plotly)
-library(ggrepel)
 
 ```
 
@@ -92,7 +89,7 @@ We're using the `dist()` function to provide a number of different distance opti
 
 # Distance Matrix via: https://stat.ethz.ch/R-manual/R-devel/library/stats/html/dist.html
 mydata.dist <- dist(mydata.cor.ro, upper = TRUE, method = "manhattan") 
-mydata.dist.sym <- as.matrix(mydata.dist )
+mydata.dist.sym <- as.matrix(mydata.dist)
 ```
 
 ## Hiearchical/Agglomerative Clustering (NEW)
@@ -248,162 +245,7 @@ mydata.pca <- prcomp(na.omit(mydata), center = TRUE, scale. = TRUE)
 ggbiplot(mydata.pca) +
     xlim(-2.5,2.5) + 
   ylim(-2.5,2.5)
-  
-
 
 ```
 
-## Shiny application functions
 
-## Initial Correlation Matrix 
-
-```{r correlation}
-
-plot_gen <- function(mydata, cor_method, threshold){
-    # Simple correlation matrix calculation
-mydata.cor <- cor(mydata, method = cor_method, use = "complete.obs")
-
-# # Optional
-# corrplot(mydata.cor)
-# 
-# palette <- colorRampPalette(c("green", "white", "red")) (20)
-# heatmap.2(x = mydata.cor, col = palette, symm = TRUE)
-
-# Reorder correlation matrix based on: https://rdrr.io/cran/lessR/man/corReorder.html 
-mydata.cor.ro <- corReorder(mydata.cor)
-
-
-## Distance Matrix Calculation
-
-# Distance matrix (Absolute value et.al.)
-mydata.cor.ro.1 <- abs(mydata.cor.ro) - 1
-
-
-## PCA on Distance Matrix
-
-# PCA 
-mydata.cor.ro.1.pca <- prcomp(mydata.cor.ro.1)
-
-# Plottable version:
-mydata.cor.ro.1.pca.plot <- as.data.frame(mydata.cor.ro.1.pca$x[,1:2])
-
-
-## Finding the Clusters
-
-# Pull out our clusters 
-mydata.cor.ro.1.pca.plot$cluster <- as.factor(kmeans(mydata.cor.ro.1.pca$x[,1:2], centers=6)$cluster)
-mydata.cor.ro.1.pca.plot$name <- rownames(mydata.cor.ro.1)
-
-
-## Finding the Graph!
-
-# Determine connectivity!
-# filtering
-selector <- ((abs(mydata.cor.ro.1) <= threshold ) * 1)
-
-for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[,i] <- selector[,i] * as.numeric(mydata.cor.ro.1.pca.plot$cluster)}
-for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {selector[i,i] <- 0 }
-
-# Re-scale the line weights
-range <- c(1,10)
-domain <- c(min(abs(mydata.cor.ro.1)[abs(mydata.cor.ro.1)>0]),max(abs(mydata.cor.ro.1)))
-line.lm <- lm(range~domain)
-
-adjust <- function(x){ 
-  # stupid lm trick to scale
-    line.lm$coefficients[[2]] * x + line.lm$coefficients[[1]]
-  }
-  
-# Repeat selector matrix, this time for strength of relationships
-thickness <- ((abs(mydata.cor.ro.1) <= threshold ) * 1)
-for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {thickness[i,i] <- 0 } # remove diagonal
-for (i in 1:length(mydata.cor.ro.1.pca.plot$cluster)) {
-  for (j in 1:length(thickness[,i])) {
-    if (thickness[j,i] != 0 ) {
-      thickness[j,i] <- adjust(thickness[j,i] * abs(mydata.cor.ro.1[j,i]))
-    } else { thickness[j,i] <- 0}
-  }
-}
-
-# Switching to networks
-# Create igraph structure
-network <- graph_from_adjacency_matrix(selector, weighted = TRUE)
-network.t <- graph_from_adjacency_matrix(thickness, weighted = TRUE)
-
-# Gets us our edges!
-mydata.edges <- get.data.frame(network) %>% # this is where "weight" is introduced
-  rename(Cluster = weight)
-
-mydata.edges.t <- get.data.frame(network.t) %>% # this is where "weight" is introduced
-  rename(thickness = weight) %>%
-  mutate(thickness = as.integer(thickness))
-
-
-# replace `from` with X1 and Y1, and `to` with X2 and Y2
-# These will be our line segments!
-mydata.segments <- mydata.edges %>% 
-  left_join(mydata.cor.ro.1.pca.plot, by=c("from"="name")) %>%
-  select(-cluster) %>%
-  mutate(X1=PC1, Y1=PC2) %>%
-  select(-PC1, -PC2)
-
-mydata.segments <- mydata.segments %>%
-  left_join(mydata.cor.ro.1.pca.plot, by=c("to"="name")) %>%
-  select(-cluster) %>%
-  mutate(X2=PC1, Y2=PC2) %>%
-  select(-PC1, -PC2)
-
-mydata.segments <- mydata.segments %>%
-  rename(cluster = Cluster)
-
-mydata.cor.ro.1.pca.plot$cluster <- as.factor(mydata.cor.ro.1.pca.plot$cluster)
-
-# NEW: cluster used for coloring 
-mydata.segments$cluster <- as.factor(mydata.segments$cluster)
-mydata.segments$thickness <- as.integer(mydata.edges.t$thickness)
-
-# Adding line segments to PCA plot
-ggplot(mydata.cor.ro.1.pca.plot, aes(x=PC1, y=PC2)) + 
-  geom_segment(aes(x=X1,y=Y1,xend=X2,yend=Y2,color=cluster,size=thickness, alpha=0.4), data=mydata.segments) +
-  geom_point(aes(color=cluster, size=4), show.legend = FALSE) +
-  xlim(-1.5,1.5) + 
-  ylim(-1.5,1.5) +
-  geom_text(aes(label=name), hjust=1, vjust=0, size=3) +
-  guides(alpha = FALSE) +
-  scale_size(range = c(0.1, 1.5), guide = guide_none()) +
-  scale_color_viridis_d() +
-  theme_bw(base_size = 20) +
-#  labs(title="Feature Space Diagram for the Boston Housing data set")
-  labs(title="Feature Space Diagram") + 
-  labs(caption = "See: https://github.rpi.edu/DataINCITE/FeatureSpaceDiagram/")
-
-}
-
-#Test
-plot_gen(mydata = as.matrix(WDBC[,3:32]), cor_method = "pearson", threshold = 0.1)
-
-
-```
-## Shiny application
-
-```{r, echo=FALSE}
-shinyApp(
-
-  ui = fluidPage(
-    fileInput(inputId = "file", label = "CSV Data File", accept = ".csv"),
-    selectInput("cor_method", "Correlation Method:",
-                choices = c("pearson", "spearman", "kendall")),
-    sliderInput(inputId = "line_threshold", label = "Distance Threshold", value = 0.5,  min = 0, max = 1, step = 0.1),
-    plotlyOutput("feature_plot")
-  ),
-
-  server = function(input, output) {
-    output$feature_plot = renderPlotly({
-        req(input$file)
-        ggplotly(
-            plot_gen(mydata = read.csv(input$file$datapath) %>% dplyr::select(where(is.numeric)), cor_method = input$cor_method, threshold = input$line_threshold), height = 800
-        )
-    })
-  }
-)
-```
