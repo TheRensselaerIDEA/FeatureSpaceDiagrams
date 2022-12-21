@@ -172,6 +172,6 @@ diag(thickness) <- 0  # remove diagonal
 }
 
 #Test
-mydata = as.matrix(WDBC[,3:32]) 
-cor_method = "pearson" 
-threshold = 0.5
+#mydata = as.matrix(WDBC[,3:32]) 
+#cor_method = "pearson" 
+#threshold = 0.5
