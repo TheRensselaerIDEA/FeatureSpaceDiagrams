@@ -28,9 +28,6 @@ library(gplots)
 library(igraph)
 library(tidyverse)
 library(ggrepel)
-library(shiny)
-library(plotly)
-library(ggrepel)
 
 ```
 
@@ -92,7 +89,7 @@ We're using the `dist()` function to provide a number of different distance opti
 
 # Distance Matrix via: https://stat.ethz.ch/R-manual/R-devel/library/stats/html/dist.html
 mydata.dist <- dist(mydata.cor.ro, upper = TRUE, method = "manhattan") 
-mydata.dist.sym <- as.matrix(mydata.dist )
+mydata.dist.sym <- as.matrix(mydata.dist)
 ```
 
 ## Hiearchical/Agglomerative Clustering (NEW)
@@ -248,8 +245,7 @@ mydata.pca <- prcomp(na.omit(mydata), center = TRUE, scale. = TRUE)
 ggbiplot(mydata.pca) +
     xlim(-2.5,2.5) + 
   ylim(-2.5,2.5)
-  
-
 
 ```
+
 
